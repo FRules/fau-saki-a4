@@ -1,10 +1,12 @@
 import random
 from collections import deque
 from typing import List
-import numpy as np
 import stock_exchange
+import numpy as np
 from experts.obscure_expert import ObscureExpert
 from framework.vote import Vote
+from framework.state import State
+from framework.experience import Experience
 from framework.period import Period
 from framework.portfolio import Portfolio
 from framework.stock_market_data import StockMarketData
@@ -17,6 +19,7 @@ from keras.optimizers import Adam
 from framework.order import Company
 from framework.utils import save_keras_sequential, load_keras_sequential
 from framework.logger import logger
+from framework.action_choice import ActionChoice
 
 
 class DeepQLearningTrader(ITrader):
@@ -42,9 +45,19 @@ class DeepQLearningTrader(ITrader):
         self.expert_b = expert_b
         self.train_while_trading = train_while_trading
 
+        self.actions = [[Vote.BUY, Vote.BUY],
+                        [Vote.BUY, Vote.SELL],
+                        [Vote.BUY, Vote.HOLD],
+                        [Vote.SELL, Vote.BUY],
+                        [Vote.SELL, Vote.SELL],
+                        [Vote.SELL, Vote.HOLD],
+                        [Vote.HOLD, Vote.BUY],
+                        [Vote.HOLD, Vote.SELL],
+                        [Vote.HOLD, Vote.HOLD]]
+
         # Parameters for neural network
-        self.state_size = 2
-        self.action_size = 10
+        self.state_size = 9
+        self.action_size = len(self.actions)
         self.hidden_size = 50
 
         # Parameters for deep Q-learning
@@ -58,8 +71,7 @@ class DeepQLearningTrader(ITrader):
 
         # Attributes necessary to remember our last actions and fill our memory with experiences
         self.last_state = None
-        self.last_action_a = None
-        self.last_action_b = None
+        self.last_actions = None
         self.last_portfolio_value = None
 
         # Create main model, either as trained model (from file) or as untrained model (from scratch)
@@ -99,13 +111,83 @@ class DeepQLearningTrader(ITrader):
         assert stock_market_data.get_companies() == [Company.A, Company.B]
 
         # TODO Compute the current state
+        state = State(portfolio, self.expert_a, self.expert_b, stock_market_data)
+        input_vector = state.get_input_vector_for_nn()
+
 
         # TODO Store state as experience (memory) and train the neural network only if trade() was called before at least once
+        if self.last_state is not None:
+            reward = 5 if self.last_portfolio_value < portfolio.get_value(stock_market_data) else -1
+            self.memory.append(Experience(self.last_state, self.last_actions, reward, state))
+
+        if len(self.memory) >= self.min_size_of_memory_before_training:
+            train_neural_net(self)
+
 
         # TODO Create actions for current state and decrease epsilon for fewer random actions
+        predicted_output = self.model.predict(input_vector)[0]
+        orders = get_orders(self, predicted_output_nn=predicted_output, portfolio=portfolio, stock_market_data=stock_market_data)
+
 
         # TODO Save created state, actions and portfolio value for the next call of trade()
+        self.last_state = state
+        self.last_portfolio_value = portfolio.get_value(stock_market_data)
+        self.last_actions = orders
+        return orders
 
+
+def get_orders(self, predicted_output_nn, portfolio: Portfolio, stock_market_data: StockMarketData) -> [Vote, Vote]:
+    choice = np.random.choice(a=[ActionChoice.RANDOM, ActionChoice.LARGEST_Q], size=1, p=[self.epsilon, 1 - self.epsilon])[0]
+
+    if choice == ActionChoice.LARGEST_Q:
+        actions = get_predicted_actions_from_nn_output(self, nn_output=predicted_output_nn)
+    else:
+        actions = get_random_actions(self)
+
+    orders = []
+    price_stock_a = stock_market_data[Company.A].get_last()[1]
+    price_stock_b = stock_market_data[Company.B].get_last()[1]
+
+    our_stock_a = portfolio.get_stock(Company.A)
+    our_stock_b = portfolio.get_stock(Company.B)
+
+    if actions[0] == Vote.BUY and actions[1] == Vote.BUY:
+        # Special Case: If we want to buy both company stocks, we divide our cash value
+        # by two and buy as many stocks from a and b as we can
+        return [Order(OrderType.BUY, Company.A, (portfolio.cash/2)//price_stock_a),
+                Order(OrderType.BUY, Company.B, (portfolio.cash/2)//price_stock_b)]
+    if actions[0] == Vote.BUY:
+        orders.append(Order(OrderType.BUY, Company.A, portfolio.cash // price_stock_a))
+    if actions[1] == Vote.BUY:
+        orders.append(Order(OrderType.BUY, Company.B, portfolio.cash // price_stock_b))
+    if actions[0] == Vote.SELL:
+        orders.append(Order(OrderType.SELL, Company.A, our_stock_a))
+    if actions[1] == Vote.SELL:
+        orders.append(Order(OrderType.SELL, Company.B, our_stock_b))
+
+    return orders
+
+
+def get_random_actions(self) -> [Vote, Vote]:
+    actions = np.array(self.actions)
+    indices = np.arange(len(actions))
+    rnd_indices = np.random.choice(indices)
+
+    return actions[rnd_indices]
+
+
+def get_predicted_actions_from_nn_output(self, nn_output: np.ndarray) -> [Vote, Vote]:
+    return self.actions[np.argmax(nn_output)]
+
+
+def train_neural_net(self):
+    copy_memory_as_list = list(self.memory.copy())
+    random.shuffle(copy_memory_as_list)
+    training_samples = copy_memory_as_list[0:self.batch_size]
+    X = []
+    for training_sample in training_samples:
+        X.append(training_sample.state.get_input_vector_for_nn())
+    return None
 
 # This method retrains the traders from scratch using training data from TRAINING and test data from TESTING
 EPISODES = 5

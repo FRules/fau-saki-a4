@@ -115,11 +115,11 @@ if __name__ == "__main__":
     # create the traders
     bah_trader = BuyAndHoldTrader()
     tt_trader_obscure = TrustingTrader(ObscureExpert(Company.A), ObscureExpert(Company.B), 'green', 'tt obscure')
-    # dql_trader = deep_q_learning_trader.DeepQLearningTrader(ObscureExpert(Company.A), ObscureExpert(Company.B), True, False, 'red')
+    dql_trader = deep_q_learning_trader.DeepQLearningTrader(ObscureExpert(Company.A), ObscureExpert(Company.B), True, False, 'red')
 
     # run the stock exchange over the testing period, with 100 skipped trading days
-    # stock_exchange.run(stock_market_data, [bah_trader, tt_trader_obscure, dql_trader])
-    stock_exchange.run(stock_market_data, [bah_trader, tt_trader_obscure])
+    stock_exchange.run(stock_market_data, [bah_trader, tt_trader_obscure, dql_trader])
+    # stock_exchange.run(stock_market_data, [bah_trader, tt_trader_obscure])
 
     # visualize the results
     stock_exchange.visualize_last_run()
