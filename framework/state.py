@@ -50,6 +50,14 @@ class State:
             vector.append(1)
         else:
             vector.append(0)
+        if self.portfolio.get_stock(Company.A) > 0:
+            vector.append(1)
+        else:
+            vector.append(0)
+        if self.portfolio.get_stock(Company.B) > 0:
+            vector.append(1)
+        else:
+            vector.append(0)
 
         if self.prev_stock_data_a is None and self.prev_stock_data_b is None:
             vector.extend([0, 0])
