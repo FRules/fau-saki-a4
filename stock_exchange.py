@@ -101,7 +101,9 @@ class StockExchange:
             pyplot.plot(keys, values, label=trader.get_name(), color=trader.get_color())
             trader_names.append(trader.get_name())
         pyplot.legend(trader_names)
-        pyplot.savefig("plot.png")
+        fig1 = pyplot.gcf()
+        pyplot.show()
+        fig1.savefig("plot.png")
 
 
 # This main method evaluates all traders over the testing period and visualize the results.
