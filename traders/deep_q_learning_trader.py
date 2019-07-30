@@ -212,10 +212,10 @@ def get_state(self, stock_market_data: StockMarketData) -> np.ndarray:
 
 
 def train_neural_net(self):
-    if len(self.memory) > self.min_size_of_memory_before_training + self.batch_size:
-        part_mem = random.sample(self.memory, self.batch_size)
+    if len(self.memory) > self.min_size_of_memory_before_training:
+        samples = random.sample(self.memory, self.batch_size)
 
-        for old_state, last_action, reward, current_state in part_mem:
+        for old_state, last_action, reward, current_state in samples:
             new_q = reward + self.discount * np.amax(self.model.predict(current_state)[0])
             q_vector = self.model.predict(old_state)
             q_vector[0][last_action] = new_q
@@ -223,7 +223,7 @@ def train_neural_net(self):
 
 
 # This method retrains the traders from scratch using training data from TRAINING and test data from TESTING
-EPISODES = 2
+EPISODES = 5
 if __name__ == "__main__":
     # Create the training data and testing data
     # Hint: You can crop the training data with training_data.deepcopy_first_n_items(n)
